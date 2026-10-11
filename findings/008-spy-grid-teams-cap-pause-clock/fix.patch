@@ -1,0 +1,81 @@
+diff --git a/games/spy-grid/__tests__/pause-clock.test.ts b/games/spy-grid/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..a6244f25
+--- /dev/null
++++ b/games/spy-grid/__tests__/pause-clock.test.ts
+@@ -0,0 +1,27 @@
++// The teams net's 10 min cap is play time: a VIP pause holds the net (README: "Pause holds every clock"), so a pause
++// does not spend the windows the room has left.
++import { expect, it } from 'vitest';
++import { kit, send, start } from './kit';
++import type { State } from '../server/types';
++
++/** Taps once, then runs the net's windows out (a tap before each re-arm); a pause, if any, starts before the first. */
++function windowsUntilClue(pause?: { at: number; ms: number }): number {
++  let s: State = send(start(6), 'p1', { type: 'join', team: 'sun' });
++  const t = s.phase.startedAt;
++  if (pause) s = kit.vip(kit.vip(s, 'pause', t + pause.at), 'resume', t + pause.at + pause.ms);
++  let windows = 0;
++  for (let i = 0; i < 30 && s.phase.id === 'teams'; i++) {
++    s = kit.timer(s, s.phase.deadline as number);
++    windows++;
++    if (s.phase.id === 'teams') s = send(s, 'p1', { type: 'join', team: 'sun' });
++  }
++  return windows;
++}
++
++it('the net gives up after 10 windows of play when nobody pauses', () => {
++  expect(windowsUntilClue()).toBe(10);
++});
++
++it('a 5 min VIP pause does not spend 5 of the 10 windows: the room still gets 10 minutes of play', () => {
++  expect(windowsUntilClue({ at: 10_000, ms: 300_000 })).toBe(10);
++});
+diff --git a/games/spy-grid/server/phases/teams.ts b/games/spy-grid/server/phases/teams.ts
+index d9c73930..82cf28d0 100644
+--- a/games/spy-grid/server/phases/teams.ts
++++ b/games/spy-grid/server/phases/teams.ts
+@@ -9,14 +9,20 @@ import { TEAMS_GIVE_UP_MS, TEAMS_MS } from '../types';
+ import type { Input, State, Transition } from '../types';
+ 
+ export function enterTeams(state: State, now: number): State {
+-  return enterPhase({ ...state, teamsTouched: false }, 'teams', now, TEAMS_MS);
++  return enterPhase({ ...state, teamsTouched: false, teamsPlayed: 0 }, 'teams', now, TEAMS_MS);
+ }
+ 
+ function onNet(state: State, now: number, next: Transition): State {
+-  const elapsed = now - state.phase.startedAt;
+-  if (!state.teamsTouched || elapsed + TEAMS_MS > TEAMS_GIVE_UP_MS) return next(state, now);
++  // Play time, not the wall clock: each window that ran out is a full minute, and a VIP pause holds the net.
++  const played = (state.teamsPlayed ?? 0) + TEAMS_MS;
++  if (!state.teamsTouched || played + TEAMS_MS > TEAMS_GIVE_UP_MS) return next(state, now);
+   // Each window needs a tap of its own: one join buys one more minute, not the whole 10.
+-  return { ...state, teamsTouched: false, phase: { ...state.phase, deadline: now + TEAMS_MS } };
++  return {
++    ...state,
++    teamsTouched: false,
++    teamsPlayed: played,
++    phase: { ...state.phase, deadline: now + TEAMS_MS },
++  };
+ }
+ 
+ export function reduceTeams(state: State, event: GameEvent<Input>, next: Transition): State {
+diff --git a/games/spy-grid/server/types.ts b/games/spy-grid/server/types.ts
+index b70b1d3f..96e49657 100644
+--- a/games/spy-grid/server/types.ts
++++ b/games/spy-grid/server/types.ts
+@@ -130,11 +130,13 @@ export interface State extends GameStateBase {
+   usedThemes: string[];
+   /** Someone has tapped in the teams phase (join / volunteer / shuffle): its net re-arms. */
+   teamsTouched?: boolean;
++  /** Play time the teams net has run out (ms, a multiple of TEAMS_MS): the cap counts it, not the wall clock. */
++  teamsPlayed?: number;
+ }
+ 
+ /** The teams phase has no visible clock: the VIP starts when the teams are set. A hidden net per
+  *  the group standard [e67ec9]: nobody tapped → start at the net; someone tapped → re-arm, up to
+- *  TEAMS_GIVE_UP_MS from the phase start (so an idle room can never hang). */
++ *  TEAMS_GIVE_UP_MS of play from the phase start (a pause holds it; an idle room can never hang). */
+ export const TEAMS_MS = 60_000;
+ export const TEAMS_GIVE_UP_MS = 600_000;
+ /** Stage 0 → stage 1 of a flip: the TV turns the card before any phone learns what it is. */

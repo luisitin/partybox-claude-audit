@@ -14,3 +14,5 @@ project rule the estimate is $5 per recorded finding plus setup, and the audit s
 | 2026-10-11 ~23:40Z | session_01BDcGE4 | ~$35 cumulative (est.) | finding 004 (daisy-field-day stage clock, same pause pattern). Estimate; spend unreadable |
 | 2026-10-11 ~23:55Z | session_01BDcGE4 | ~$40 cumulative (est.) | finding 005 (tune-in psychic rotation). Estimate; spend unreadable |
 | 2026-10-12 ~00:10Z | session_01BDcGE4 | ~$45 cumulative (est.) | finding 006 (unfixed, test gap). Estimate; spend unreadable |
+| 2026-10-12 ~00:30Z | session_01BDcGE4 | ~$50 cumulative (est.) | finding 007 (luigi cpu walk through a pause). Estimate; spend unreadable |
+| 2026-10-12 ~00:45Z | session_01BDcGE4 | ~$55 cumulative (est.) | finding 008 (spy-grid teams cap through a pause). Estimate; spend unreadable |

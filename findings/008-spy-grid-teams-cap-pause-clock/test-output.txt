@@ -1,0 +1,17 @@
+# Before the fix: games/spy-grid server/ reverted to 5df9d458; the new test file present
+$ vitest run --project games games/spy-grid/__tests__/pause-clock.test.ts
+   ✓ the net gives up after 10 windows of play when nobody pauses
+   × a 5 min VIP pause does not spend 5 of the 10 windows: the room still gets 10 minutes of play
+  AssertionError: expected 5 to be 10 // Object.is equality
+   Test Files 1 failed (1)
+        Tests 1 failed | 1 passed (2)
+
+# After the fix
+$ vitest run --project games games/spy-grid/__tests__/pause-clock.test.ts
+        Tests 2 passed (2)
+$ vitest run --project games games/spy-grid                      -> Test Files 10 passed (10), Tests 86 passed (86)
+$ vitest run --project 'contract*' -t spy-grid                   -> Test Files 2 passed | 7 skipped, Tests 21 passed (21)
+$ pnpm sim --game spy-grid --players vary --runs 60 --seed 1     -> 60 runs, 0 failed (teams x60, done x60)
+$ eslint games/spy-grid games/luigi-rescue-operation             -> clean
+$ prettier --check games/spy-grid games/luigi-rescue-operation   -> clean
+$ tsc -p tsconfig.json                                           -> exit 0

@@ -1,0 +1,28 @@
+# Before the fix: games/luigi-rescue-operation server/ and README reverted to 5df9d458; the new test file present
+$ vitest run --project games games/luigi-rescue-operation/__tests__/pause-clock.test.ts
+   × a 30 s pause moves the cpu seat's planned clears and finish on by 30 s
+   × a human out 10 s after the cpu plan wins, because the pause held the cpu plan
+   × a cpu seat's time left at its last clear is read against the deadline the game ends on
+   × an End sent while paused settles at the pause: the cpu seat gets only the rooms it walked by then
+  AssertionError: expected 69434 to be 99434 // Object.is equality
+  AssertionError: expected 'cpu' to be 'a' // Object.is equality
+  AssertionError: expected 930000 to be 900000 // Object.is equality
+  AssertionError: expected 900000 to be less than 900000
+   Test Files 1 failed (1)
+        Tests 4 failed (4)
+
+# After the fix
+$ vitest run --project games games/luigi-rescue-operation/__tests__/pause-clock.test.ts
+   Test Files 1 passed (1)
+        Tests 4 passed (4)
+
+# The rest of the checks after the fix
+$ vitest run --project games games/luigi-rescue-operation        -> Test Files 2 passed (2), Tests 28 passed (28)
+$ vitest run --project 'contract*' -t luigi-rescue-operation     -> Tests 19 passed (19)
+$ pnpm sim --game luigi-rescue-operation --players vary --runs 120 --seed 1
+                                                                 -> 120 runs, 0 failed
+$ pnpm sim --game luigi-rescue-operation --players vary --runs 150 --seed 9001 --strategy chaos
+                                                                 -> 150 runs, 0 failed
+$ eslint games/luigi-rescue-operation                            -> clean
+$ prettier --check games/luigi-rescue-operation                  -> clean
+$ tsc -p tsconfig.json                                           -> exit 0

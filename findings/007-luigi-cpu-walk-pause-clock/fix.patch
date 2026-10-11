@@ -1,0 +1,173 @@
+diff --git a/games/luigi-rescue-operation/README.md b/games/luigi-rescue-operation/README.md
+index e75ddf97..03e0e125 100644
+--- a/games/luigi-rescue-operation/README.md
++++ b/games/luigi-rescue-operation/README.md
+@@ -58,7 +58,8 @@ lists every player; every top score is in `winnerIds`. Each player's rooms clear
+ - A cpu seat's clear times are a plan: the TV counts those that are past, and `results()` counts rooms cleared by
+   the end, so a plan cut short by someone else finishing first does not count extra rooms.
+ - A disconnected player stays in their room; nothing waits for them.
+-- Pause holds the deadline; inputs are ignored while paused.
++- Pause holds the deadline and every cpu seat's planned walk; inputs are ignored while paused. An End sent while
++  paused counts the rooms cleared by the pause.
+ - VIP end goes straight to `done` with the rooms cleared so far.
+ - Nobody solves anything: everyone has 0 rooms and the game ends at the deadline with a shared top rank.
+ 
+diff --git a/games/luigi-rescue-operation/__tests__/pause-clock.test.ts b/games/luigi-rescue-operation/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..1e47d809
+--- /dev/null
++++ b/games/luigi-rescue-operation/__tests__/pause-clock.test.ts
+@@ -0,0 +1,76 @@
++// The VIP pause holds a cpu seat's planned walk as it holds the deadline (README: "Pause holds the deadline"): the walk
++// is play, so a resume moves its clear times on by the pause, and an End sent while paused settles at the pause.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import { PLAY_MS, ROOM_POINTS, ROOMS } from '../server/types';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const PLAYERS = [
++  { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++  { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++  { id: 'cpu', name: 'Luigi Bot', avatarId: 'bee', connected: true, bot: true },
++];
++
++const kit = testKit(game, { t0: T0, inputAt: 1000, players: PLAYERS, settings: {} });
++const at = (t: number): number => T0 + t;
++type Seat = State['seats'][string];
++
++/** The cpu seat plans its walk at 1 s; its last clear is the planned finish, in ms from the phase start. */
++function planned(): { state: State; finish: number } {
++  const state = kit.input(kit.start(), 'cpu', { type: 'cpu' }, at(1_000));
++  const finish = (state.seats.cpu as Seat).clears.at(-1) as number;
++  expect(finish).toBeLessThan(PLAY_MS); // the walk pulls the deadline in
++  return { state, finish };
++}
++
++describe('pause clock: a cpu seat walks through a VIP pause as the deadline does', () => {
++  it("a 30 s pause moves the cpu seat's planned clears and finish on by 30 s", () => {
++    const { state, finish } = planned();
++    const resumed = kit.vip(kit.vip(state, 'pause', at(10_000)), 'resume', at(40_000));
++    expect(resumed.phase.deadline).toBe(at(finish + 30_000));
++    expect((resumed.seats.cpu as Seat).clears.at(-1)).toBe(finish + 30_000);
++  });
++
++  it('a human out 10 s after the cpu plan wins, because the pause held the cpu plan', () => {
++    const { state, finish } = planned();
++    const resumed = kit.vip(kit.vip(state, 'pause', at(10_000)), 'resume', at(40_000));
++    // 'a' clears its last room at finish + 10 s on the wall clock. The cpu's walk is 30 s longer than its plan on the
++    // wall clock after the pause, so the cpu is out at finish + 30 s and 'a' is first.
++    const end = resumed.phase.deadline as number;
++    const humanClears = Array.from({ length: ROOMS }, (_, i) =>
++      Math.round(((i + 1) * (finish + 10_000)) / ROOMS),
++    );
++    const withHuman: State = {
++      ...resumed,
++      seats: {
++        ...resumed.seats,
++        a: {
++          ...(resumed.seats.a as Seat),
++          room: ROOMS,
++          clears: humanClears,
++          left: humanClears.map((t) => Math.min(PLAY_MS, Math.max(0, end - (T0 + t)))),
++        },
++      },
++    };
++    expect(kit.timer(withHuman, end).winner).toBe('a');
++  });
++
++  it("a cpu seat's time left at its last clear is read against the deadline the game ends on", () => {
++    const { state } = planned();
++    const resumed = kit.vip(kit.vip(state, 'pause', at(10_000)), 'resume', at(40_000));
++    // The walk ends exactly at the deadline, so no time is left on its clock: 9 rooms and 0 ms.
++    expect(kit.timer(resumed, resumed.phase.deadline as number).scores.cpu).toBe(
++      ROOMS * ROOM_POINTS,
++    );
++  });
++
++  it('an End sent while paused settles at the pause: the cpu seat gets only the rooms it walked by then', () => {
++    const { state, finish } = planned();
++    const paused = kit.vip(state, 'pause', at(10_000));
++    // The End lands at finish + 5 s, still paused: the walk had only run 10 s of play by the pause.
++    const done = kit.vip(paused, 'end', at(finish + 5_000));
++    expect(done.scores.cpu).toBeLessThan(ROOMS * ROOM_POINTS);
++  });
++});
+diff --git a/games/luigi-rescue-operation/server/index.ts b/games/luigi-rescue-operation/server/index.ts
+index b4c81aea..de1231ed 100644
+--- a/games/luigi-rescue-operation/server/index.ts
++++ b/games/luigi-rescue-operation/server/index.ts
+@@ -20,7 +20,7 @@ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+ import { enterPlay, reducePlay } from './phases/play';
+ import { helpfulInput, makeRooms } from './rooms';
+-import { playSpan, results, settle } from './scoring';
++import { holdPlans, playSpan, results, settle } from './scoring';
+ import { KINDS, PATTERN_SIZE, PHASES, ROOMS, inputSchema } from './types';
+ import type { Input, Room, RoomKind, Seat, State } from './types';
+ 
+@@ -101,17 +101,20 @@ function init(ctx: InitContext): State {
+   return enterPlay(base, ctx.now);
+ }
+ 
+-/** The game is over: count the rooms and move to done. */
+-const finishGame = (state: State, now: number): State =>
+-  enterDone(
+-    settle(state, Math.min(Math.max(now - state.phase.startedAt, 0), playSpan(state))),
+-    now,
+-  );
++/** The game is over: count the rooms at `at` (the play clock's moment) and move to done at `now`. */
++const finishGame = (state: State, now: number, at = now): State =>
++  enterDone(settle(state, Math.min(Math.max(at - state.phase.startedAt, 0), playSpan(state))), now);
+ 
+ const reduce = composeReduce<State, Input>({
+   phases: { play: reducePlay },
+   advance: (state, now) => (state.phase.id === 'play' ? finishGame(state, now) : state),
+-  end: (state, now) => (state.phase.id === 'play' ? finishGame(state, now) : enterDone(state, now)),
++  // An End sent while paused counts the rooms by the pause: the paused time is no play.
++  end: (state, now) =>
++    state.phase.id === 'play'
++      ? finishGame(state, now, state.phase.paused?.at ?? now)
++      : enterDone(state, now),
++  afterVip: (before, after, event) =>
++    event.type === 'vip' && event.action === 'resume' ? holdPlans(before, after, event.now) : after,
+ });
+ 
+ const statusOf = (state: State) => (): PlayerStatus =>
+diff --git a/games/luigi-rescue-operation/server/scoring.ts b/games/luigi-rescue-operation/server/scoring.ts
+index 9edc8fae..b382b75d 100644
+--- a/games/luigi-rescue-operation/server/scoring.ts
++++ b/games/luigi-rescue-operation/server/scoring.ts
+@@ -1,6 +1,6 @@
+ // Inputs, cpu seats and the ranking for Luigi Rescue Operation. Nothing is scored until the game ends: the first one
+ // out wins, then whoever got through the most rooms, then whoever got there sooner.
+-import { buildResults, nextFloat } from '@partybox/game-sdk';
++import { buildResults, nextFloat, pausedFor } from '@partybox/game-sdk';
+ import type { GameResults } from '@partybox/game-sdk';
+ import { BASE_MS, act, enterRoom, roomsDone } from './rooms';
+ import { PLAY_MS, ROOM_POINTS, ROOMS } from './types';
+@@ -15,6 +15,23 @@ export function playSpan(state: State): number {
+ const clockLeft = (windowEnd: number, now: number): number =>
+   Math.min(PLAY_MS, Math.max(0, windowEnd - now));
+ 
++/**
++ * A VIP resume moves the deadline on by the pause (the SDK's applyVip). A cpu seat's planned walk is play too, so the
++ * clears still ahead of the pause move on by it: the walk holds through a pause as the clock does.
++ */
++export function holdPlans(before: State, after: State, now: number): State {
++  const shift = pausedFor(before, now);
++  if (shift === 0) return after;
++  const pausedRel = (before.phase.paused?.at ?? now) - before.phase.startedAt;
++  const seats: State['seats'] = {};
++  for (const [id, seat] of Object.entries(after.seats)) {
++    seats[id] = seat.planned
++      ? { ...seat, clears: seat.clears.map((t) => (t > pausedRel ? t + shift : t)) }
++      : seat;
++  }
++  return { ...after, seats };
++}
++
+ /** A human acts at `now`. Anything the rules refuse leaves the state unchanged. */
+ export function applyInput(
+   state: State,
