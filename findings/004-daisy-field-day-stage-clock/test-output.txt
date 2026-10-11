@@ -1,0 +1,14 @@
+# Before the fix (games/daisy-field-day/server reverted to 5df9d458; test file present)
+$ pnpm vitest run games/daisy-field-day/__tests__/pause-clock.test.ts
+   × a move after a 20 s pause is stored at its stage time (37 s on the wall = 17 s in the stage) 12ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+  AssertionError: expected undefined to match object { t: 17000 }
+   Test Files 1 failed (1)
+   Tests 1 failed | 1 passed (2)
+
+# After the fix (fix.patch applied)
+$ pnpm vitest run games/daisy-field-day/__tests__/pause-clock.test.ts
+   Test Files 1 passed (1)
+   Tests 2 passed (2)
+
+# Checks after the fix: daisy unit suite 27/27 (3 files); contract suite for daisy 19/19 passed; sim 30 runs 0 failed; eslint clean. The control test (no pause) passes before and after.

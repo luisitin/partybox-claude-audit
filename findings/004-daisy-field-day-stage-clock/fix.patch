@@ -1,0 +1,107 @@
+diff --git a/games/daisy-field-day/__tests__/pause-clock.test.ts b/games/daisy-field-day/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..f74f0b92
+--- /dev/null
++++ b/games/daisy-field-day/__tests__/pause-clock.test.ts
+@@ -0,0 +1,30 @@
++// A pause holds the deadline (README: "Pause holds the deadline"), so a move is timed on the stage clock: a move after
++// a resume is stored at its stage time, not at the wall time since the stage began.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import { STAGE_MS } from '../server/types';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const PLAYERS = [
++  { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++  { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++];
++const kit = testKit(game, { t0: T0, inputAt: 1000, players: PLAYERS, settings: {} });
++
++describe('a pause is not stage time', () => {
++  it('control: a move with no pause is stored at its stage time', () => {
++    const r = kit.input(kit.start(), 'a', { type: 'jump' }, T0 + 17_000);
++    expect(r.moves['a']?.[0]).toMatchObject({ t: 17_000 });
++  });
++
++  it('a move after a 20 s pause is stored at its stage time (37 s on the wall = 17 s in the stage)', () => {
++    const s = kit.start();
++    const paused = kit.vip(s, 'pause', T0 + 5_000);
++    const resumed = kit.vip(paused, 'resume', T0 + 25_000) as State;
++    expect(resumed.phase.deadline).toBe(T0 + STAGE_MS + 20_000);
++    const r = kit.input(resumed, 'a', { type: 'jump' }, T0 + 37_000);
++    expect(r.moves['a']?.[0]).toMatchObject({ t: 17_000 });
++  });
++});
+diff --git a/games/daisy-field-day/server/index.ts b/games/daisy-field-day/server/index.ts
+index f48dff6f..a9e2bd3a 100644
+--- a/games/daisy-field-day/server/index.ts
++++ b/games/daisy-field-day/server/index.ts
+@@ -19,7 +19,7 @@ import type {
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterBreak, enterDone, reduceBreak } from './phases/break';
+ import { enterStage, reduceStage } from './phases/stage';
+-import { results, settle } from './scoring';
++import { results, settle, stageStart } from './scoring';
+ import {
+   JUMP_COOLDOWN_MS,
+   LEAD_RED_MEDALS,
+@@ -111,7 +111,7 @@ const courseView = (state: State): CourseView => ({
+   stage: state.stage,
+   stages: STAGES,
+   course: state.course,
+-  t0: state.phase.startedAt,
++  t0: stageStart(state),
+   scores: state.scores,
+   gained: state.gained,
+   lead: state.lead,
+@@ -154,7 +154,7 @@ export const game: GameDefinition<State, Input, FieldDayTvView, FieldDayControll
+       // A seat's legs tire: after BOT_MOVES it rests, so it cannot keep the stage busy past its deadline.
+       const moves = state.moves[playerId] ?? [];
+       const last = moves[moves.length - 1];
+-      const span = (state.phase.deadline ?? 0) - state.phase.startedAt;
++      const span = (state.phase.deadline ?? 0) - stageStart(state);
+       if (moves.length >= BOT_MOVES || (last !== undefined && last.t >= span - JUMP_COOLDOWN_MS))
+         return null;
+       return { type: rng.chance(0.65) ? 'jump' : 'duck' };
+diff --git a/games/daisy-field-day/server/scoring.ts b/games/daisy-field-day/server/scoring.ts
+index 928ce039..a634d2cd 100644
+--- a/games/daisy-field-day/server/scoring.ts
++++ b/games/daisy-field-day/server/scoring.ts
+@@ -5,11 +5,16 @@ import { addMove, cpuSkill, evaluate, isObstacle } from './course';
+ import { STAGE_MS } from './types';
+ import type { Move, State } from './types';
+ 
++/** Stage time 0: when the stage began, moved on by each pause (a resume shifts the deadline, not `startedAt`). */
++export function stageStart(state: State): number {
++  return state.phase.deadline === null ? state.phase.startedAt : state.phase.deadline - STAGE_MS;
++}
++
+ /** A human jumps or ducks at `now`. A move the cooldown refuses changes nothing. */
+ export function move(state: State, id: string, kind: Move['kind'], now: number): State {
+   const mine = state.moves[id];
+   if (mine === undefined) return state;
+-  const next = addMove(mine, { t: now - state.phase.startedAt, kind });
++  const next = addMove(mine, { t: now - stageStart(state), kind });
+   return next === null ? state : { ...state, moves: { ...state.moves, [id]: next } };
+ }
+ 
+@@ -20,7 +25,7 @@ const CPU_EARLY_MS = 250;
+ export function cpuPlay(state: State, id: string, now: number): State {
+   const start = state.moves[id];
+   if (start === undefined) return state;
+-  const rel = Math.min(now - state.phase.startedAt, STAGE_MS);
++  const rel = Math.min(now - stageStart(state), STAGE_MS);
+   const first = state.cpu[id] ?? 0;
+   let moves: readonly Move[] = start;
+   let at = first;
+@@ -53,7 +58,7 @@ export function cpuPlay(state: State, id: string, now: number): State {
+ 
+ /** The stage is over: cpu seats finish planning, then everyone's medals are banked. */
+ export function settle(state: State): State {
+-  const end = state.phase.startedAt + STAGE_MS;
++  const end = stageStart(state) + STAGE_MS;
+   let s = state;
+   for (const id of Object.keys(s.players)) if (s.players[id]?.bot === true) s = cpuPlay(s, id, end);
+   const scores: State['scores'] = { ...s.scores };
