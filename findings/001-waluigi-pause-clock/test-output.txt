@@ -1,0 +1,18 @@
+# Before the fix (server/ reverted to 5df9d458; test file present)
+$ pnpm vitest run games/waluigis-pinball-arcade/__tests__/pause-clock.test.ts
+   × a tap in the last seconds of the game clock is accepted and timed on the game clock 18ms
+   × a skip after a resume ends the machine at the game time it reached, not at the wall time 11ms
+   × an end sent during a pause settles at the pause, not at the wall time 6ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+  AssertionError: expected [] to deeply equal [ { t: 89000, v: 1 } ]
+  AssertionError: expected 90000 to be 89000 // Object.is equality
+  AssertionError: expected 40000 to be 10000 // Object.is equality
+   Test Files 1 failed (1)
+   Tests 3 failed (3)
+
+# After the fix (fix.patch applied)
+$ pnpm vitest run games/waluigis-pinball-arcade/__tests__/pause-clock.test.ts
+   Test Files 1 passed (1)
+   Tests 3 passed (3)
+
+# Whole waluigi unit suite after the fix: 25 passed (2 files); eslint and prettier clean on the changed files.

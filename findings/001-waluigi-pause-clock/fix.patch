@@ -1,0 +1,118 @@
+diff --git a/games/waluigis-pinball-arcade/__tests__/pause-clock.test.ts b/games/waluigis-pinball-arcade/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..535fdcd6
+--- /dev/null
++++ b/games/waluigis-pinball-arcade/__tests__/pause-clock.test.ts
+@@ -0,0 +1,44 @@
++// A pause holds the deadline (README: "Pause holds the deadline"), so the machine's clock must not run through it:
++// a tap or an end after a resume is timed on the game clock, not on the wall clock since the phase began.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import { GAME_MS } from '../server/types';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const PLAYERS = [
++  { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++  { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++];
++const kit = testKit(game, { t0: T0, inputAt: 1000, players: PLAYERS, settings: {} });
++
++/** Play 10 s, pause for 30 s, resume: 80 s of play is left on the clock and the deadline reads T0 + GAME_MS + 30 s. */
++const resumed = (): State => {
++  const s = kit.start();
++  const paused = kit.vip(s, 'pause', T0 + 10_000);
++  return kit.vip(paused, 'resume', T0 + 40_000) as State;
++};
++
++describe('a pause is not play', () => {
++  it('a tap in the last seconds of the game clock is accepted and timed on the game clock', () => {
++    const r = resumed();
++    expect(r.phase.deadline).toBe(T0 + GAME_MS + 30_000);
++    // 1 s before the clock runs out: 89 s of game time, 119 s since the phase began.
++    const s = kit.input(r, 'a', { type: 'flip', side: 1 }, T0 + 119_000);
++    expect(s.acts['a']).toEqual([{ t: 89_000, v: 1 }]);
++  });
++
++  it('a skip after a resume ends the machine at the game time it reached, not at the wall time', () => {
++    const skipped = kit.vip(resumed(), 'skip', T0 + 119_000) as State;
++    expect(skipped.phase.id).toBe('done');
++    expect(skipped.endMs).toBe(89_000);
++  });
++
++  it('an end sent during a pause settles at the pause, not at the wall time', () => {
++    const paused = kit.vip(kit.start(), 'pause', T0 + 10_000);
++    const ended = kit.vip(paused, 'end', T0 + 40_000) as State;
++    expect(ended.phase.id).toBe('done');
++    expect(ended.endMs).toBe(10_000);
++  });
++});
+diff --git a/games/waluigis-pinball-arcade/server/index.ts b/games/waluigis-pinball-arcade/server/index.ts
+index 6ac8febc..7caa3966 100644
+--- a/games/waluigis-pinball-arcade/server/index.ts
++++ b/games/waluigis-pinball-arcade/server/index.ts
+@@ -18,7 +18,7 @@ import type {
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+ import { enterPlay, reducePlay } from './phases/play';
+-import { results, settleGame } from './scoring';
++import { gameStart, results, settleGame } from './scoring';
+ import { GAME_MS, PHASES, inputSchema } from './types';
+ import type { Act, Input, State } from './types';
+ /** A seat the simulator drives rests after BOT_ACTS taps, or once the clock has run out (a tap then is refused). */
+@@ -26,7 +26,7 @@ const BOT_ACTS = 60;
+ const BOT_GAP_MS = 70;
+ const tired = (acts: readonly Act[] | undefined, state: State): boolean => {
+   const last = acts?.[acts.length - 1];
+-  const span = (state.phase.deadline ?? 0) - state.phase.startedAt;
++  const span = (state.phase.deadline ?? 0) - gameStart(state);
+   return (acts?.length ?? 0) >= BOT_ACTS || (last !== undefined && last.t >= span - BOT_GAP_MS);
+ };
+ 
+@@ -75,10 +75,12 @@ function init(ctx: InitContext): State {
+ }
+ 
+ /** The game is over (timer, VIP skip or end): the machines' scores, then the end. */
+-const finish = (state: State, now: number): State =>
+-  state.phase.id === 'play'
+-    ? enterDone(settleGame(state, now - state.phase.startedAt), now)
+-    : state;
++const finish = (state: State, now: number): State => {
++  if (state.phase.id !== 'play') return state;
++  // An End sent while paused (no resume first) settles at the pause: the paused time is no play.
++  const at = state.phase.paused?.at ?? now;
++  return enterDone(settleGame(state, at - gameStart(state)), now);
++};
+ 
+ const reduce = composeReduce<State, Input>({
+   phases: { play: reducePlay },
+@@ -90,7 +92,7 @@ const statusOf = (state: State) => (): PlayerStatus =>
+   state.phase.id === 'play' ? 'active' : 'waiting';
+ 
+ const playView = (state: State): PlayView => ({
+-  t0: state.phase.startedAt,
++  t0: gameStart(state),
+   gameMs: GAME_MS,
+   seed: state.seed,
+   endMs: state.endMs,
+diff --git a/games/waluigis-pinball-arcade/server/scoring.ts b/games/waluigis-pinball-arcade/server/scoring.ts
+index 60ccd1da..7bb9c0aa 100644
+--- a/games/waluigis-pinball-arcade/server/scoring.ts
++++ b/games/waluigis-pinball-arcade/server/scoring.ts
+@@ -6,9 +6,14 @@ import { planPlay, simulate } from './pinball';
+ import { GAME_MS, MAX_ACTS, MIN_GAP_MS } from './types';
+ import type { Input, State } from './types';
+ 
++/** Game time 0: the play's start, moved on by each pause (a resume shifts the deadline, not `startedAt`). */
++export function gameStart(state: State): number {
++  return state.phase.deadline === null ? state.phase.startedAt : state.phase.deadline - GAME_MS;
++}
++
+ /** A human acts at `now`. Anything the rules refuse leaves the state unchanged. */
+ export function applyAct(state: State, id: string, input: Input, now: number): State {
+-  const rel = now - state.phase.startedAt;
++  const rel = now - gameStart(state);
+   if (input.type === 'cpu' || rel < 0 || rel > GAME_MS) return state;
+   if (state.players[id]?.bot === true) return state;
+   const acts = state.acts[id];
