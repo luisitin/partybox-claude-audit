@@ -1,0 +1,82 @@
+diff --git a/games/mega-stingby-stompers/__tests__/pause-clock.test.ts b/games/mega-stingby-stompers/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..8b6e2276
+--- /dev/null
++++ b/games/mega-stingby-stompers/__tests__/pause-clock.test.ts
+@@ -0,0 +1,33 @@
++// A pause holds the deadline (README: "Pause holds the deadline"), so the fight's clock must not run through it:
++// a stomp after a resume is timed on the fight clock, not on the wall clock since the phase began.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const PLAYERS = [
++  { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++  { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++];
++const kit = testKit(game, { t0: T0, inputAt: 1000, players: PLAYERS, settings: {} });
++
++describe('a pause is not fight time', () => {
++  it('control: the same stomp with no pause counts', () => {
++    const s = kit.start();
++    const total = s.settings['seconds'] as number;
++    const r = kit.input(s, 'a', { type: 'stomp', col: 0 }, T0 + total * 1000 - 1_000);
++    expect(r.taps['a']).toBe(1);
++  });
++
++  it('a stomp in the last second of the fight after a pause counts (it is inside the fight)', () => {
++    const s = kit.start();
++    const total = s.settings['seconds'] as number;
++    const paused = kit.vip(s, 'pause', T0 + 5_000);
++    const resumed = kit.vip(paused, 'resume', T0 + 25_000) as State;
++    expect(resumed.phase.deadline).toBe(T0 + total * 1000 + 20_000);
++    // 1 s before the clock runs out: total-1 s into the fight, 20 s more than that since it began.
++    const r = kit.input(resumed, 'a', { type: 'stomp', col: 0 }, T0 + total * 1000 + 19_000);
++    expect(r.taps['a']).toBe(1);
++  });
++});
+diff --git a/games/mega-stingby-stompers/server/index.ts b/games/mega-stingby-stompers/server/index.ts
+index 3362cc1c..ab90c047 100644
+--- a/games/mega-stingby-stompers/server/index.ts
++++ b/games/mega-stingby-stompers/server/index.ts
+@@ -19,7 +19,7 @@ import type {
+ } from '@partybox/game-sdk';
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+-import { enterPlay, reducePlay } from './phases/play';
++import { enterPlay, fightStart, reducePlay } from './phases/play';
+ import { results } from './scoring';
+ import { COLUMNS, PHASES, hpFor, inputSchema } from './types';
+ import type { Input, Pound, State } from './types';
+@@ -95,7 +95,7 @@ function statusOf(state: State): (id: string) => PlayerStatus {
+ }
+ 
+ const bossView = (state: State): BossView => ({
+-  since: state.phase.startedAt,
++  since: fightStart(state),
+   seconds: state.settings.seconds,
+   off: state.off,
+   hp: state.hp,
+diff --git a/games/mega-stingby-stompers/server/phases/play.ts b/games/mega-stingby-stompers/server/phases/play.ts
+index 4f14bb0d..e74511f4 100644
+--- a/games/mega-stingby-stompers/server/phases/play.ts
++++ b/games/mega-stingby-stompers/server/phases/play.ts
+@@ -11,8 +11,15 @@ export function enterPlay(state: State, now: number): State {
+   return enterPhase(state, 'play', now, state.settings.seconds * 1000);
+ }
+ 
++/** Fight time 0: when the fight began, moved on by each pause (a resume shifts the deadline, not `startedAt`). */
++export function fightStart(state: State): number {
++  return state.phase.deadline === null
++    ? state.phase.startedAt
++    : state.phase.deadline - state.settings.seconds * 1000;
++}
++
+ function stomp(state: State, id: string, col: number, now: number, next: Transition): State {
+-  const ms = now - state.phase.startedAt;
++  const ms = now - fightStart(state);
+   const total = state.settings.seconds * 1000;
+   if (ms < 0 || ms >= total || state.hp <= 0) return state;
+   const tapped = { ...state, taps: { ...state.taps, [id]: (state.taps[id] ?? 0) + 1 } };

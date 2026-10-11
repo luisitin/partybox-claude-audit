@@ -1,0 +1,14 @@
+# Before the fix (games/mega-stingby-stompers/server reverted to 5df9d458; test file present)
+$ pnpm vitest run games/mega-stingby-stompers/__tests__/pause-clock.test.ts
+   × a stomp in the last second of the fight after a pause counts (it is inside the fight) 6ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+  AssertionError: expected undefined to be 1 // Object.is equality
+   Test Files 1 failed (1)
+   Tests 1 failed | 1 passed (2)
+
+# After the fix (fix.patch applied)
+$ pnpm vitest run games/mega-stingby-stompers/__tests__/pause-clock.test.ts
+   Test Files 1 passed (1)
+   Tests 2 passed (2)
+
+# Checks after the fix: contract suite for mega 19/19 passed; sim 30 runs 0 failed; eslint clean. The control test (no pause) passes before and after.
