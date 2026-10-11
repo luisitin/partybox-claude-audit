@@ -1,0 +1,119 @@
+diff --git a/games/peach-day-off/__tests__/pause-clock.test.ts b/games/peach-day-off/__tests__/pause-clock.test.ts
+new file mode 100644
+index 00000000..b5a32021
+--- /dev/null
++++ b/games/peach-day-off/__tests__/pause-clock.test.ts
+@@ -0,0 +1,40 @@
++// A pause holds the deadline (README: "Pause holds the deadline"), so a stage's clock must not run through it:
++// a step after a resume is timed on the stage clock, not on the wall clock since the stage began.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import { GIFT_MS } from '../server/types';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const PLAYERS = [
++  { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++  { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++];
++const kit = testKit(game, { t0: T0, inputAt: 1000, players: PLAYERS, settings: {} });
++
++describe('a pause is not stage time', () => {
++  it('a step in the last seconds of the stage clock after a pause is accepted at its stage time', () => {
++    const s = kit.start();
++    const paused = kit.vip(s, 'pause', T0 + 5_000);
++    const resumed = kit.vip(paused, 'resume', T0 + 25_000) as State;
++    expect(resumed.phase.id).toBe('gift');
++    expect(resumed.phase.deadline).toBe(T0 + GIFT_MS + 20_000);
++    // 1 s before the clock runs out: 17 s into the stage (37 s since it began, less the 20 s pause).
++    const r = kit.input(resumed, 'a', { type: 'step', dir: 1 }, T0 + 37_000);
++    expect(r.acts['a']).toHaveLength(1);
++    expect(r.acts['a']?.[0]).toMatchObject({ t: 17_000 });
++  });
++
++  it('an end sent during a pause banks the stage at the pause, as if the pause had not happened', () => {
++    const tap = (state: State, now: number): State =>
++      kit.input(state, 'a', { type: 'step', dir: 1 }, now);
++    // no pause: the stage is ended at 5 s into it
++    const ended = kit.vip(tap(kit.start(), T0 + 3_000), 'end', T0 + 5_000) as State;
++    // the same 5 s, then a pause; the End arrives 20 s later, still paused
++    const paused = kit.vip(tap(kit.start(), T0 + 3_000), 'pause', T0 + 5_000);
++    const pausedEnd = kit.vip(paused, 'end', T0 + 25_000) as State;
++    expect(pausedEnd.phase.id).toBe('done');
++    expect(pausedEnd.gained).toEqual(ended.gained);
++  });
++});
+diff --git a/games/peach-day-off/server/index.ts b/games/peach-day-off/server/index.ts
+index 7596815d..3e04166a 100644
+--- a/games/peach-day-off/server/index.ts
++++ b/games/peach-day-off/server/index.ts
+@@ -21,7 +21,7 @@ import { enterDone, enterGap, reduceGap } from './phases/gap';
+ import { reduceGem } from './phases/gem';
+ import { enterStage, reduceStage } from './phases/gift';
+ import { enterRound, reduceTray } from './phases/tray';
+-import { results, roundGains, settleNow, stageLength, stageMs } from './scoring';
++import { results, roundGains, settleNow, stageLength, stageMs, stageStart } from './scoring';
+ import { makeTracks } from './stages';
+ import { PHASES, ROUNDS, inputSchema } from './types';
+ import type { Act, Input, State } from './types';
+@@ -30,7 +30,7 @@ const BOT_ACTS = 40;
+ const BOT_GAP_MS = 60;
+ const tired = (acts: readonly Act[] | undefined, state: State): boolean => {
+   const last = acts?.[acts.length - 1];
+-  const span = (state.phase.deadline ?? 0) - state.phase.startedAt;
++  const span = (state.phase.deadline ?? 0) - stageStart(state);
+   return (acts?.length ?? 0) >= BOT_ACTS || (last !== undefined && last.t >= span - BOT_GAP_MS);
+ };
+ 
+@@ -108,7 +108,7 @@ const isPlaying = (state: State): boolean => ['gift', 'tray', 'gem'].includes(st
+ 
+ /** The stage (or tray round) in play is over (timer, VIP skip): bank it, then what comes next. */
+ const finish = (state: State, now: number): State => {
+-  const settled = settleNow(state, now - state.phase.startedAt);
++  const settled = settleNow(state, now - stageStart(state));
+   if (state.phase.id === 'gift') return enterGap(settled, now);
+   if (state.phase.id === 'tray')
+     return state.round >= ROUNDS - 1
+@@ -132,7 +132,8 @@ const reduce = composeReduce<State, Input>({
+   },
+   end: (state, now) => {
+     if (state.phase.id === 'done') return state;
+-    return enterDone(settleNow(state, now - state.phase.startedAt), now);
++    // An End sent while paused settles at the pause: the paused time is no play.
++    return enterDone(settleNow(state, (state.phase.paused?.at ?? now) - stageStart(state)), now);
+   },
+ });
+ 
+@@ -140,7 +141,7 @@ const statusOf = (state: State) => (): PlayerStatus => (isPlaying(state) ? 'acti
+ 
+ function stageView(state: State): StageView {
+   return {
+-    t0: state.phase.startedAt,
++    t0: stageStart(state),
+     stage: state.stage,
+     // During gap and done the TV counts each row at the end of the stage that just finished.
+     stageMs:
+diff --git a/games/peach-day-off/server/scoring.ts b/games/peach-day-off/server/scoring.ts
+index 0ee6cad1..6032a254 100644
+--- a/games/peach-day-off/server/scoring.ts
++++ b/games/peach-day-off/server/scoring.ts
+@@ -29,9 +29,17 @@ export const stageMs = (state: State): number =>
+ export const stageLength = (stage: number): number =>
+   stage === 0 ? GIFT_MS : stage === 2 ? GEM_MS : ROUND_MS;
+ 
++/** Stage time 0: when the stage began, moved on by each pause (a resume shifts the deadline, not `startedAt`). */
++export function stageStart(state: State): number {
++  const length = stageMs(state);
++  return state.phase.deadline === null || length === 0
++    ? state.phase.startedAt
++    : state.phase.deadline - length;
++}
++
+ /** A human acts at `now`. Anything the rules refuse leaves the state unchanged. */
+ export function applyAct(state: State, id: string, input: Input, now: number): State {
+-  const rel = now - state.phase.startedAt;
++  const rel = now - stageStart(state);
+   if (input.type === 'cpu' || rel < 0 || rel > stageMs(state)) return state;
+   if (state.players[id]?.bot === true) return state;
+   if (input.type === 'tray') {

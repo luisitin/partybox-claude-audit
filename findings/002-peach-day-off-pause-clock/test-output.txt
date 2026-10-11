@@ -1,0 +1,16 @@
+# Before the fix (games/peach-day-off/server reverted to 5df9d458; test file present)
+$ pnpm vitest run games/peach-day-off/__tests__/pause-clock.test.ts
+   × a step in the last seconds of the stage clock after a pause is accepted at its stage time 15ms
+   × an end sent during a pause banks the stage at the pause, as if the pause had not happened 8ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+  AssertionError: expected [] to have a length of 1 but got +0
+  AssertionError: expected { a: +0, b: +0 } to deeply equal { a: 6, b: 6 }
+   Test Files 1 failed (1)
+   Tests 2 failed (2)
+
+# After the fix (fix.patch applied)
+$ pnpm vitest run games/peach-day-off/__tests__/pause-clock.test.ts
+   Test Files 1 passed (1)
+   Tests 2 passed (2)
+
+# Checks after the fix: peach unit suite 27/27 (3 files); contract suite for peach 19/19 passed; sim 30 runs 0 failed; eslint and prettier clean.

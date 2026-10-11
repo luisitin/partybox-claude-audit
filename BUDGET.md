@@ -9,3 +9,4 @@ project rule the estimate is $5 per recorded finding plus setup, and the audit s
 | ---- | ------- | -------- | ---- |
 | 2026-10-11 21:22Z | session_01BDcGE4 | ~$2 | start: cloned both repos, pnpm install, engine tests green (208); monorepo SHA 5df9d458 |
 | 2026-10-11 ~22:40Z | session_01BDcGE4 | ~$20 cumulative (est.) | 3 Haiku sweeps (~830k tokens) + finding 001 (waluigi pause clock). Spend is not readable here; this is a conservative estimate |
+| 2026-10-11 ~23:00Z | session_01BDcGE4 | ~$25 cumulative (est.) | finding 002 (peach pause clock, sibling of 001). Estimate; spend unreadable |
