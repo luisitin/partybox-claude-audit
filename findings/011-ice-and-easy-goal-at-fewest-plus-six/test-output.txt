@@ -1,0 +1,13 @@
+# Before the fix: games/ice-and-easy/server/world.ts reverted to 5df9d458; the new test present
+$ vitest run --project games games/ice-and-easy/__tests__/game.test.ts
+   × a goal reached on the fewest slides plus six is the loss too, for no points
+  AssertionError: expected { n: 1, ok: 1, last: 1, p: +0, …(4) } to match object { n: 1, ok: +0, last: +0, e: true }
+   Tests 1 failed | 23 passed (24)
+
+# After the fix
+$ vitest run --project games games/ice-and-easy                  -> Test Files 2 passed (2), Tests 30 passed (30)
+$ vitest run --project 'contract*' -t ice-and-easy               -> Test Files 1 passed | 8 skipped, Tests 19 passed (19)
+$ pnpm sim --game ice-and-easy --players 4 --runs 60 --seed 2    -> 60 runs, 0 failed
+$ eslint games/ice-and-easy                                      -> clean
+$ prettier --check games/ice-and-easy/server/world.ts games/ice-and-easy/__tests__/game.test.ts -> clean
+$ tsc -p tsconfig.json                                           -> exit 0

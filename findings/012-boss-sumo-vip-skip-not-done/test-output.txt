@@ -1,0 +1,6 @@
+# Repro against 5df9d458 (no patch: the two readings need an owner decision). Temporary test, removed afterwards.
+$ vitest run --project games games/boss-sumo-bro-blitzers/__tests__/tmp-skip.test.ts
+after skip: round 1000000 -> round seg 1 round 0
+   × repro: a VIP skip in round 1 segment 1
+  AssertionError: expected 'round' to be 'done' // Object.is equality
+   Tests 1 failed (1)

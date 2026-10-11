@@ -43,3 +43,5 @@ failing-then-passing test, one unfixed with a repro.
 | 008 | games/spy-grid: teams net's 10 min cap counts a VIP pause | should | fixed (patch + test) | ~$55 |
 | 009 | games/fake-out: two fact sentences name their own answer before the reveal (pass 2) | should | fixed (patch + test); fo-cp-065 and 17 accept-form facts open | ~$60 |
 | 010 | packages/sim: `smoke` gate passes with no game played (zero or non-numeric --runs) | should | fixed (patch + test) | ~$65 |
+| 011 | games/ice-and-easy: a goal on the fewest plus six scores a point, where the board is lost | should | fixed (patch + test) | ~$70 |
+| 012 | games/boss-sumo-bro-blitzers: a VIP skip moves one segment, README says the game ends | should | unfixed (repro; owner decides the rule) | ~$70 |

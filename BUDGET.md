@@ -18,3 +18,4 @@ project rule the estimate is $5 per recorded finding plus setup, and the audit s
 | 2026-10-12 ~00:45Z | session_01BDcGE4 | ~$55 cumulative (est.) | finding 008 (spy-grid teams cap through a pause). Estimate; spend unreadable |
 | 2026-10-12 ~01:30Z | session_01BDcGE4 | ~$60 cumulative (est.); pass 2 spend ~$5 of $40 | second pass: finding 009 (fake-out fact text names the answer). Estimate; spend unreadable |
 | 2026-10-12 ~02:00Z | session_01BDcGE4 | ~$65 cumulative (est.); pass 2 spend ~$10 of $40 | second pass: finding 010 (smoke gate passes with no run). Estimate; spend unreadable |
+| 2026-10-12 ~02:30Z | session_01BDcGE4 | ~$70 cumulative (est.); pass 2 spend ~$15 of $40 | second pass: finding 011 (ice-and-easy goal at fewest+6), finding 012 (boss-sumo VIP skip, unfixed). Estimate; spend unreadable |
