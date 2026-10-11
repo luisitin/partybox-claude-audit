@@ -1,0 +1,14 @@
+# Before the fix (games/tune-in/server/turn.ts reverted to 5df9d458; test file present)
+$ pnpm vitest run games/tune-in/__tests__/psychic-repeat.test.ts
+   × after a refill, a dropped player at the head of the bag does not give the last psychic a second turn 23ms
+  ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+  AssertionError: expected [ 1, 3, 6, 14, 15, 19, 21, 27, …(47) ] to deeply equal []
+   Test Files 1 failed (1)
+   Tests 1 failed (1)
+
+# After the fix (fix.patch applied)
+$ pnpm vitest run games/tune-in/__tests__/psychic-repeat.test.ts
+   Test Files 1 passed (1)
+   Tests 1 passed (1)
+
+# Checks after the fix: tune-in unit suite 158/158 (15 files); contract suite for tune-in 21/21 passed (2 files); sim 30 runs 0 failed; eslint clean.

@@ -1,0 +1,52 @@
+diff --git a/games/tune-in/__tests__/psychic-repeat.test.ts b/games/tune-in/__tests__/psychic-repeat.test.ts
+new file mode 100644
+index 00000000..448276ce
+--- /dev/null
++++ b/games/tune-in/__tests__/psychic-repeat.test.ts
+@@ -0,0 +1,25 @@
++// Spec: "never the last psychic twice in a row when anyone else can go" (turn.ts drawPsychic). A refill that puts a
++// dropped player first must not hand the last psychic a second turn while a connected player is in the bag.
++import { describe, expect, it } from 'vitest';
++import { seedRng } from '@partybox/game-sdk';
++import { planTurn } from '../server/turn';
++import { link, start } from './helpers';
++
++describe('the psychic does not repeat while someone else can go', () => {
++  it('after a refill, a dropped player at the head of the bag does not give the last psychic a second turn', () => {
++    const base = start(3);
++    const [a, b, c] = base.seats as [string, string, string];
++    const dropped = link(base, c, false);
++    const repeats: number[] = [];
++    for (let seed = 1; seed <= 300; seed++) {
++      const s = {
++        ...dropped,
++        rng: seedRng(seed),
++        turn: { ...dropped.turn, psychic: b },
++        psychicBag: { ...dropped.psychicBag, all: [c], [a]: [], [b]: [], [c]: [] },
++      };
++      if (planTurn(s, false).turn.psychic === b) repeats.push(seed);
++    }
++    expect(repeats).toEqual([]);
++  });
++});
+diff --git a/games/tune-in/server/turn.ts b/games/tune-in/server/turn.ts
+index 95052c0a..278157f3 100644
+--- a/games/tune-in/server/turn.ts
++++ b/games/tune-in/server/turn.ts
+@@ -60,10 +60,15 @@ function drawPsychic(
+     if (shuffled.length > 1 && shuffled[0] === last) shuffled.push(shuffled.shift() as string);
+     queue = [...queue.filter((id) => !shuffled.includes(id)), ...shuffled];
+   }
+-  const index = Math.max(
++  let index = Math.max(
+     0,
+     queue.findIndex((id) => connected(state, id)),
+   );
++  // The last psychic goes again only when nobody else in the queue can go (the first connected seat may be them).
++  if (queue[index] === state.turn.psychic) {
++    const other = queue.findIndex((id, i) => i !== index && connected(state, id));
++    if (other >= 0) index = other;
++  }
+   const psychic = queue[index] ?? '';
+   return [psychic, queue.filter((_, i) => i !== index), next];
+ }
