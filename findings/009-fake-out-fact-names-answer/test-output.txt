@@ -1,0 +1,12 @@
+# Before the fix: games/fake-out/content/family.json as at 5df9d458; the new test file present
+$ vitest run --project games games/fake-out/__tests__/fact-answer.test.ts
+  AssertionError: expected [ 'fo-food-007', 'fo-space-005', …(1) ] to deeply equal [ 'fo-cp-065' ]
+   Test Files 1 failed (1)
+        Tests 1 failed (1)
+
+# After the fix
+$ vitest run --project games games/fake-out                       -> Test Files 11 passed (11), Tests 82 passed (82)
+$ vitest run --project 'contract*' -t fake-out                    -> Test Files 2 passed | 7 skipped, Tests 21 passed (21)
+$ pnpm sim --game fake-out --players 12 --runs 40 --seed 3        -> 40 runs, 0 failed
+$ eslint games/fake-out/__tests__/fact-answer.test.ts             -> clean
+$ prettier --check games/fake-out/__tests__/fact-answer.test.ts games/fake-out/content/family.json -> clean

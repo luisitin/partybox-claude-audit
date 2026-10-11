@@ -1,0 +1,72 @@
+diff --git a/games/fake-out/__tests__/fact-answer.test.ts b/games/fake-out/__tests__/fact-answer.test.ts
+new file mode 100644
+index 000000000..efe859ecb
+--- /dev/null
++++ b/games/fake-out/__tests__/fact-answer.test.ts
+@@ -0,0 +1,44 @@
++// A fact's sentence must not name its own truth before the reveal: the blank is the only place the answer is
++// read from. A word of the answer in the sentence gives the answer away (the blank is then the easy part).
++import { describe, expect, it } from 'vitest';
++import family from '../content/family.json' with { type: 'json' };
++import spicy from '../content/spicy.json' with { type: 'json' };
++import { BLANK } from '../content/schema';
++
++interface Fact {
++  id: string;
++  fact: string;
++  truth: { answer: string };
++}
++
++/** The words of a text, lower-cased and without punctuation: "Apollo 14's" is ["apollo", "14", "s"]. */
++const words = (text: string): string[] =>
++  text
++    .toLowerCase()
++    .split(/[^\p{L}\p{N}]+/u)
++    .filter((w) => w !== '');
++
++/** Does the answer's word run appear, word for word, in the sentence around the blank? */
++function namesAnswer(f: Fact): boolean {
++  const [before = '', after = ''] = f.fact.split(BLANK);
++  const sentence = words(`${before} ${after}`);
++  const answer = words(f.truth.answer);
++  for (let i = 0; i + answer.length <= sentence.length; i++) {
++    if (answer.every((w, k) => sentence[i + k] === w)) return true;
++  }
++  return false;
++}
++
++/**
++ * Facts whose sentence still names their answer, left as they are on purpose (see FINDING.md 009): a pun
++ * whose wording carries the answer, which needs its content owner's rewrite. Fixing one means removing it here.
++ */
++const KNOWN: string[] = ['fo-cp-065'];
++
++describe('fact sentences do not name their own truth', () => {
++  it('every played fact keeps its answer out of the sentence (the known exceptions aside)', () => {
++    const facts = [...(family as { facts: Fact[] }).facts, ...(spicy as { facts: Fact[] }).facts];
++    const offenders = facts.filter(namesAnswer).map((f) => f.id);
++    expect(offenders).toEqual(KNOWN);
++  });
++});
+diff --git a/games/fake-out/content/family.json b/games/fake-out/content/family.json
+index 0f49804ed..2be380d16 100644
+--- a/games/fake-out/content/family.json
++++ b/games/fake-out/content/family.json
+@@ -835,7 +835,7 @@
+       "id": "fo-food-007",
+       "category": "food",
+       "kind": "word",
+-      "fact": "German chocolate cake is named after an American chocolate maker whose last name was ___.",
++      "fact": "A popular chocolate cake is named after an American chocolate maker whose last name was ___.",
+       "truth": {
+         "answer": "german",
+         "accept": [
+@@ -2960,7 +2960,7 @@
+       "id": "fo-space-005",
+       "category": "space",
+       "kind": "word",
+-      "fact": "Tree seeds flown around the Moon on Apollo 14 grew into so-called ___ trees.",
++      "fact": "Tree seeds that rode aboard Apollo 14's command module grew into so-called ___ trees.",
+       "truth": {
+         "answer": "moon",
+         "accept": [

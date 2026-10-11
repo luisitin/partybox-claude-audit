@@ -41,3 +41,4 @@ failing-then-passing test, one unfixed with a repro.
 | 006 | packages/game-sdk contract tests: leak check vacuous for pre-quoted secrets | should | unfixed (repro, no patch) | ~$45 |
 | 007 | games/luigi-rescue-operation: cpu walk and End-while-paused through a VIP pause | should | fixed (patch + test) | ~$50 |
 | 008 | games/spy-grid: teams net's 10 min cap counts a VIP pause | should | fixed (patch + test) | ~$55 |
+| 009 | games/fake-out: two fact sentences name their own answer before the reveal (pass 2) | should | fixed (patch + test); fo-cp-065 and 17 accept-form facts open | ~$60 |
