@@ -1,0 +1,17 @@
+# Before the fix: packages/sim/src/smoke.ts as at 5df9d458; the new test file present
+$ vitest run --project sim packages/sim/src/smoke-gate.test.ts
+   × --runs 0 plays nothing, so the gate fails
+   × --runs NaN plays nothing, so the gate fails
+  AssertionError: expected true to be false // Object.is equality
+   Tests 2 failed (2)
+
+$ pnpm sim --smoke --runs 0 --no-repros        -> exit 0, no output (before)
+$ pnpm sim --smoke --runs ten --no-repros      -> exit 0, no output (before)
+
+# After the fix
+$ vitest run --project sim packages/sim/src/smoke-gate.test.ts  -> Tests 2 passed (2)
+$ pnpm sim --smoke --runs 0 --no-repros        -> "<game>: no runs played (check --runs)", exit 1
+$ vitest run --project sim packages/sim/src/sim.test.ts -t smoke -> Tests 3 passed | 17 skipped (20)
+$ eslint packages/sim/src/smoke.ts packages/sim/src/smoke-gate.test.ts -> clean
+$ prettier --check (same two files) -> clean
+$ tsc -p tsconfig.json -> exit 0
