@@ -19,3 +19,8 @@ project rule the estimate is $5 per recorded finding plus setup, and the audit s
 | 2026-10-12 ~01:30Z | session_01BDcGE4 | ~$60 cumulative (est.); pass 2 spend ~$5 of $40 | second pass: finding 009 (fake-out fact text names the answer). Estimate; spend unreadable |
 | 2026-10-12 ~02:00Z | session_01BDcGE4 | ~$65 cumulative (est.); pass 2 spend ~$10 of $40 | second pass: finding 010 (smoke gate passes with no run). Estimate; spend unreadable |
 | 2026-10-12 ~02:30Z | session_01BDcGE4 | ~$70 cumulative (est.); pass 2 spend ~$15 of $40 | second pass: finding 011 (ice-and-easy goal at fewest+6), finding 012 (boss-sumo VIP skip, unfixed). Estimate; spend unreadable |
+| 2026-10-12 (pass 3) | session_01BDcGE4 | ~$73 cumulative (est.); pass 3 ~$3 of $26 | third pass setup: pulled the private repo to 6399290, pause-clock sweep of games/*/server, hidden-info scan, content scan. Estimate; spend unreadable |
+| 2026-10-12 (pass 3) | session_01BDcGE4 | ~$78 cumulative (est.); pass 3 ~$8 | third pass: finding 013 (castle-hassle VIP end while paused judges the round through the pause). Estimate; spend unreadable |
+| 2026-10-12 (pass 3) | session_01BDcGE4 | ~$83 cumulative (est.); pass 3 ~$13 | third pass: finding 014 (lane-change VIP end while paused credits paused pickups). Estimate; spend unreadable |
+| 2026-10-12 (pass 3) | session_01BDcGE4 | ~$88 cumulative (est.); pass 3 ~$18 | third pass: finding 015 (brick-breaker VIP end while paused credits paused shells). Estimate; spend unreadable |
+| 2026-10-12 (pass 3) | session_01BDcGE4 | ~$93 cumulative (est.); pass 3 ~$23 of $26 | third pass: finding 016 (lightning-round questions name their own answer). Stopped at four new entries; a fifth would reach the $96 line with the wrap-up. Estimate; spend unreadable |
