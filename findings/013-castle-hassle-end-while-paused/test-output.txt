@@ -1,0 +1,49 @@
+# Finding 013: castle-hassle End while paused (pass 3)
+# Monorepo SHA 6399290d12942b6c6b8b5b477fbbcd049adaad83
+
+## Before the fix: pause-clock.test.ts and game.test.ts run on the unpatched tree
+
+ RUN  v4.1.11 /home/user/partybox
+ ❯ |games| games/castle-hassle/__tests__/pause-clock.test.ts (2 tests | 1 failed) 13ms
+     × an end sent during a pause scores the round as it stood when the pause began 10ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |games| games/castle-hassle/__tests__/pause-clock.test.ts > a pause is not round time > an end sent during a pause scores the round as it stood when the pause began
+AssertionError: expected { a: 6040, b: 6040, c: 6040 } to deeply equal {}
+- Expected
++ Received
+- {}
++ {
++   "a": 6040,
++   "b": 6040,
++   "c": 6040,
++ }
+ ❯ games/castle-hassle/__tests__/pause-clock.test.ts:30:27
+     28|     const pausedEnd = kit.vip(paused, 'end', T0 + 22_000) as State;
+     29|     expect(pausedEnd.phase.id).toBe('done');
+     30|     expect(pausedEnd.out).toEqual(ended.out);
+       |                           ^
+     31|     expect(scoresOf(pausedEnd)).toEqual(scoresOf(ended));
+     32|   });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 26 passed (27)
+   Start at  03:52:55
+   Duration  1.31s (transform 656ms, setup 0ms, import 1.21s, tests 517ms, environment 0ms)
+exit 1
+
+## After the fix (patch applied)
+
+ RUN  v4.1.11 /home/user/partybox
+ Test Files  4 passed (4)
+      Tests  27 passed (27)
+   Start at  03:52:57
+   Duration  1.07s (transform 422ms, setup 0ms, import 924ms, tests 546ms, environment 1ms)
+exit 0
+
+## Also after the fix
+
+pnpm vitest run --project 'contract*' -t castle-hassle: 19 passed (8 files skipped)
+node_modules/.bin/tsc -p tsconfig.json: exit 0 (see the last line of this file)
+pnpm sim --game castle-hassle --players 4 --runs 60 --seed 3: 60 runs, 0 failed
+
+tsc: node_modules/.bin/tsc -p tsconfig.json --noEmit (with the fix applied, tree as in fix.patch): exit 0

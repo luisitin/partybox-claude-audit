@@ -1,0 +1,93 @@
+diff --git a/games/castle-hassle/README.md b/games/castle-hassle/README.md
+index 3a414a177..db579fa65 100644
+--- a/games/castle-hassle/README.md
++++ b/games/castle-hassle/README.md
+@@ -29,7 +29,7 @@ Score = milliseconds stood (a survivor scores the round length + 1). The longest
+ 
+ ## Edge cases
+ 
+-- A pause moves `began` and `endsAt` on by its length; everything else counts from `began`.
++- A pause moves `began` and `endsAt` on by its length; everything else counts from `began`. A VIP end sent while paused judges the round where the pause began.
+ - A disconnected player stays where they are; Bowser does not wait.
+ - Everyone idle: Bowser reaches them and equal times tie.
+ 
+diff --git a/games/castle-hassle/__tests__/pause-clock.test.ts b/games/castle-hassle/__tests__/pause-clock.test.ts
+new file mode 100644
+index 000000000..9b7493ab4
+--- /dev/null
++++ b/games/castle-hassle/__tests__/pause-clock.test.ts
+@@ -0,0 +1,48 @@
++// A pause holds the round's clock (README: "A pause moves `began` and `endsAt` on by its length"). An End sent while
++// paused must judge the round where the pause began, as a skip before the pause would have.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import { scoresOf } from '../server/scoring';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const kit = testKit(game, {
++  t0: T0,
++  inputAt: 1000,
++  players: [
++    { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++    { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++    { id: 'c', name: 'Cy', avatarId: 'bee', connected: true },
++  ],
++  settings: { seconds: 30 },
++});
++
++describe('a pause is not round time', () => {
++  it('an end sent during a pause scores the round as it stood when the pause began', () => {
++    // No pause: the round is ended 2 s in, while everyone still stands on the start row.
++    const ended = kit.vip(kit.start(), 'end', T0 + 2_000) as State;
++    // The same 2 s, then a pause; the End arrives 20 s later, still paused. Bowser's wall reaches row 3 at ~6 s
++    // of round time, which is inside the pause, so the paused End must not judge it.
++    const paused = kit.vip(kit.start(), 'pause', T0 + 2_000);
++    const pausedEnd = kit.vip(paused, 'end', T0 + 22_000) as State;
++    expect(pausedEnd.phase.id).toBe('done');
++    expect(pausedEnd.out).toEqual(ended.out);
++    expect(scoresOf(pausedEnd)).toEqual(scoresOf(ended));
++  });
++
++  it('a step after a resume is judged on the round clock, as in a run with no pause', () => {
++    const tap = (state: State, now: number): State =>
++      kit.input(state, 'a', { type: 'move', dir: 'up' }, now);
++    // No pause: a step 2 s in.
++    const plain = tap(kit.start(), T0 + 2_000);
++    // The same 2 s, a 20 s pause, and a resume that lands on the same round time (2 s in), then the same step.
++    const resumed = kit.vip(
++      kit.vip(kit.start(), 'pause', T0 + 2_000),
++      'resume',
++      T0 + 22_000,
++    ) as State;
++    const acted = tap(resumed, T0 + 22_000);
++    expect(acted.pos.a).toEqual(plain.pos.a);
++  });
++});
+diff --git a/games/castle-hassle/server/index.ts b/games/castle-hassle/server/index.ts
+index 3b8d0647d..de22d96f8 100644
+--- a/games/castle-hassle/server/index.ts
++++ b/games/castle-hassle/server/index.ts
+@@ -18,7 +18,7 @@ import type {
+ } from '@partybox/game-sdk';
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+-import { advancePlay, enterPlay, reducePlay, skipPlay } from './phases/play';
++import { advancePlay, enterPlay, reducePlay, settle, skipPlay } from './phases/play';
+ import { results, scoresOf } from './scoring';
+ import { PHASES } from './types';
+ import type { State } from './types';
+@@ -76,8 +76,11 @@ const reduce = composeReduce<State, Input>({
+   phases: { play: reducePlay },
+   advance: (state, now) => (state.phase.id === 'play' ? advancePlay(state, now, enterDone) : state),
+   skip: (state, now) => (state.phase.id === 'play' ? skipPlay(state, now, enterDone) : state),
++  // An End sent while paused judges the round where the pause began: the paused time is not round time.
+   end: (state, now) =>
+-    state.phase.id === 'play' ? skipPlay(state, now, enterDone) : enterDone(state, now),
++    state.phase.id === 'play'
++      ? enterDone(settle(state, state.phase.paused?.at ?? now), now)
++      : enterDone(state, now),
+   prepare: (state, event) =>
+     event.type === 'vip' && event.action === 'resume'
+       ? shifted(state, pausedFor(state, event.now))
