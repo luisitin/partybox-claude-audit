@@ -1,0 +1,52 @@
+# Finding 015: brick-breaker end-while-paused (pass 3)
+# Monorepo SHA 6399290d12942b6c6b8b5b477fbbcd049adaad83
+
+## Before the fix: games/brick-breaker, tests on the unpatched tree
+
+ RUN  v4.1.11 /home/user/partybox
+ ❯ |games| games/brick-breaker/__tests__/pause-clock.test.ts (2 tests | 1 failed) 14ms
+     × an end sent during a pause credits the same coins as an end at the pause 12ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |games| games/brick-breaker/__tests__/pause-clock.test.ts > a pause is not round time > an end sent during a pause credits the same coins as an end at the pause
+AssertionError: expected { a: 40, b: 60 } to deeply equal { a: 5, b: 7 }
+- Expected
++ Received
+  {
+-   "a": 5,
+-   "b": 7,
++   "a": 40,
++   "b": 60,
+  }
+ ❯ games/brick-breaker/__tests__/pause-clock.test.ts:27:29
+     25|     const pausedEnd = kit.vip(paused, 'end', T0 + 24_000) as State;
+     26|     expect(pausedEnd.phase.id).toBe('done');
+     27|     expect(pausedEnd.coins).toEqual(ended.coins);
+       |                             ^
+     28|   });
+     29|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed | 5 passed (6)
+      Tests  1 failed | 40 passed (41)
+   Start at  04:01:17
+   Duration  2.55s (transform 2.42s, setup 0ms, import 3.75s, tests 242ms, environment 1ms)
+exit 1
+
+## After the fix (patch applied)
+
+ RUN  v4.1.11 /home/user/partybox
+ Test Files  6 passed (6)
+      Tests  41 passed (41)
+   Start at  04:01:20
+   Duration  2.06s (transform 1.27s, setup 0ms, import 2.66s, tests 222ms, environment 1ms)
+exit 0
+
+## Also after the fix
+
+      Tests  19 passed | 2136 skipped (2155)
+pnpm sim --game brick-breaker --players 4 --runs 60 --seed 3:
+$ tsx packages/sim/src/cli.ts --game brick-breaker --players 4 --runs 60 --seed 3
+brick-breaker: 60 runs, 0 failed, 1196 ms (212 events / 41 s simulated per game, max 68 s)
+  phases: play×60  done×60
+eslint rc=0; prettier clean on the changed files
+
+tsc: node_modules/.bin/tsc -p tsconfig.json --noEmit (fix applied, tree as in fix.patch): exit 0

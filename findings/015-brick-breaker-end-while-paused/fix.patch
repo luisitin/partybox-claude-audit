@@ -1,0 +1,81 @@
+diff --git a/games/brick-breaker/README.md b/games/brick-breaker/README.md
+index 245bf86bf..9a7dd1b1f 100644
+--- a/games/brick-breaker/README.md
++++ b/games/brick-breaker/README.md
+@@ -29,7 +29,7 @@ Score = coins. The most coins wins; equal tallies share the rank. The wall `stat
+ 
+ ## Edge cases
+ 
+-- A pause moves `began` and `endsAt` on by its length; everything else counts from `began`.
++- A pause moves `began` and `endsAt` on by its length; everything else counts from `began`. An end sent while paused settles the shells up to the pause.
+ - Nobody acting: nobody scores and the round still ends on time.
+ - A shell is judged where your paddle stands at the beat, not where it was pressed.
+ - The next brick of a column is `grid[column][b % 6]`, so a column that has been broken through starts over.
+diff --git a/games/brick-breaker/__tests__/pause-clock.test.ts b/games/brick-breaker/__tests__/pause-clock.test.ts
+new file mode 100644
+index 000000000..2cd666216
+--- /dev/null
++++ b/games/brick-breaker/__tests__/pause-clock.test.ts
+@@ -0,0 +1,36 @@
++// A pause holds the round's clock (README: "A pause moves `began` and `endsAt` on by its length"). A VIP end sent while
++// paused settles the shells up to the pause, as an end before it would have.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const kit = testKit(game, {
++  t0: T0,
++  inputAt: 1000,
++  players: [
++    { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++    { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++  ],
++  settings: { seconds: 30 },
++});
++
++describe('a pause is not round time', () => {
++  it('an end sent during a pause credits the same coins as an end at the pause', () => {
++    // No pause: the round is ended 4 s in.
++    const ended = kit.vip(kit.start(), 'end', T0 + 4_000) as State;
++    // The same 4 s, then a pause; the End arrives 20 s later, still paused.
++    const paused = kit.vip(kit.start(), 'pause', T0 + 4_000);
++    const pausedEnd = kit.vip(paused, 'end', T0 + 24_000) as State;
++    expect(pausedEnd.phase.id).toBe('done');
++    expect(pausedEnd.coins).toEqual(ended.coins);
++  });
++
++  it('an end after a resume credits the coins of a run with no pause', () => {
++    const ended = kit.vip(kit.start(), 'end', T0 + 5_000) as State;
++    const resumed = kit.vip(kit.vip(kit.start(), 'pause', T0 + 4_000), 'resume', T0 + 24_000);
++    const resumedEnd = kit.vip(resumed, 'end', T0 + 25_000) as State;
++    expect(resumedEnd.coins).toEqual(ended.coins);
++  });
++});
+diff --git a/games/brick-breaker/server/index.ts b/games/brick-breaker/server/index.ts
+index 745ed44a7..6eedfecbc 100644
+--- a/games/brick-breaker/server/index.ts
++++ b/games/brick-breaker/server/index.ts
+@@ -18,7 +18,7 @@ import type {
+ } from '@partybox/game-sdk';
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+-import { advancePlay, enterPlay, reducePlay, skipPlay } from './phases/play';
++import { advancePlay, enterPlay, reducePlay, settle, skipPlay } from './phases/play';
+ import { results, scoresOf } from './scoring';
+ import { PHASES } from './types';
+ import type { State } from './types';
+@@ -82,8 +82,11 @@ const reduce = composeReduce<State, Input>({
+   phases: { play: reducePlay },
+   advance: (state, now) => (state.phase.id === 'play' ? advancePlay(state, now, enterDone) : state),
+   skip: (state, now) => (state.phase.id === 'play' ? skipPlay(state, now, enterDone) : state),
++  // A pause holds the round, so an end sent while paused settles the shells where the pause began.
+   end: (state, now) =>
+-    state.phase.id === 'play' ? skipPlay(state, now, enterDone) : enterDone(state, now),
++    state.phase.id === 'play'
++      ? enterDone(settle(state, state.phase.paused?.at ?? now), now)
++      : enterDone(state, now),
+   prepare: (state, event) =>
+     event.type === 'vip' && event.action === 'resume'
+       ? shifted(state, pausedFor(state, event.now))
