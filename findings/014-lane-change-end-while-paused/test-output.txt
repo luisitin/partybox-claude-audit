@@ -1,0 +1,52 @@
+# Finding 014: lane-change end-while-paused (pass 3)
+# Monorepo SHA 6399290d12942b6c6b8b5b477fbbcd049adaad83
+
+## Before the fix: games/lane-change, tests on the unpatched tree
+
+ RUN  v4.1.11 /home/user/partybox
+ ❯ |games| games/lane-change/__tests__/pause-clock.test.ts (2 tests | 1 failed) 17ms
+     × an end sent during a pause credits the same coins as an end at the pause 14ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |games| games/lane-change/__tests__/pause-clock.test.ts > a pause is not round time > an end sent during a pause credits the same coins as an end at the pause
+AssertionError: expected { a: +0, b: 26 } to deeply equal { a: +0, b: 5 }
+- Expected
++ Received
+  {
+    "a": 0,
+-   "b": 5,
++   "b": 26,
+  }
+ ❯ games/lane-change/__tests__/pause-clock.test.ts:27:29
+     25|     const pausedEnd = kit.vip(paused, 'end', T0 + 24_000) as State;
+     26|     expect(pausedEnd.phase.id).toBe('done');
+     27|     expect(pausedEnd.coins).toEqual(ended.coins);
+       |                             ^
+     28|   });
+     29|
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 43 passed (44)
+   Start at  03:55:32
+   Duration  1.53s (transform 1.05s, setup 0ms, import 1.57s, tests 554ms, environment 0ms)
+exit 1
+
+## After the fix (patch applied)
+
+ RUN  v4.1.11 /home/user/partybox
+ Test Files  4 passed (4)
+      Tests  44 passed (44)
+   Start at  03:55:35
+   Duration  1.22s (transform 681ms, setup 0ms, import 1.20s, tests 639ms, environment 0ms)
+exit 0
+
+## Also after the fix
+
+ Test Files  1 passed | 8 skipped (9)
+      Tests  19 passed | 2136 skipped (2155)
+pnpm sim --game lane-change --players 4 --runs 60 --seed 3:
+$ tsx packages/sim/src/cli.ts --game lane-change --players 4 --runs 60 --seed 3
+lane-change: 60 runs, 0 failed, 5474 ms (231 events / 40 s simulated per game, max 65 s)
+  phases: play×60  done×60
+eslint rc=0; prettier clean on the changed files
+
+tsc: node_modules/.bin/tsc -p tsconfig.json --noEmit (fix applied, tree as in fix.patch): exit 0

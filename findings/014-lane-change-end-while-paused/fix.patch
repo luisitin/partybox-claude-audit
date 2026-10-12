@@ -1,0 +1,84 @@
+diff --git a/games/lane-change/README.md b/games/lane-change/README.md
+index 11dd300ae..8112921ec 100644
+--- a/games/lane-change/README.md
++++ b/games/lane-change/README.md
+@@ -35,7 +35,7 @@ Score = coins. The most coins wins; equal tallies share the rank, and a round wi
+ - A crash during a stun does not extend it; it still ends the run.
+ - A stun blocks moves only: a stunned car still picks up the coins in its lane, and it is dimmed until the stun ends.
+ - A player who drops off keeps their car in its lane and scores like an idle car until they return.
+-- The VIP's skip and end both settle the pickups up to now, then finish the round.
++- The VIP's skip and end both settle the pickups up to now, then finish the round. An end sent while paused settles them up to the pause.
+ - Karts sharing a lane stack behind each other 2.4 scene units apart on the 3D road; the 2D fallback stacks them 2.5 rem apart and, with many in one lane, closes the gap so the top car stays on the road.
+ 
+ ## Settings
+diff --git a/games/lane-change/__tests__/pause-clock.test.ts b/games/lane-change/__tests__/pause-clock.test.ts
+new file mode 100644
+index 000000000..3da39a219
+--- /dev/null
++++ b/games/lane-change/__tests__/pause-clock.test.ts
+@@ -0,0 +1,37 @@
++// A pause holds the round's clock (README: "A pause moves `began` and `endsAt` on by its length"). A VIP end sent while
++// paused settles the pickups up to the pause, as a skip or an end before it would have.
++import { describe, expect, it } from 'vitest';
++import { testKit } from '@partybox/game-sdk/testing';
++import { game } from '../server/index';
++import type { State } from '../server/types';
++
++const T0 = 1_000_000;
++const kit = testKit(game, {
++  t0: T0,
++  inputAt: 1000,
++  players: [
++    { id: 'a', name: 'Ana', avatarId: 'fox', connected: true },
++    { id: 'b', name: 'Ben', avatarId: 'owl', connected: true },
++  ],
++  settings: { seconds: 30 },
++});
++
++describe('a pause is not round time', () => {
++  it('an end sent during a pause credits the same coins as an end at the pause', () => {
++    // No pause: the round is ended 4 s in.
++    const ended = kit.vip(kit.start(), 'end', T0 + 4_000) as State;
++    // The same 4 s, then a pause; the End arrives 20 s later, still paused.
++    const paused = kit.vip(kit.start(), 'pause', T0 + 4_000);
++    const pausedEnd = kit.vip(paused, 'end', T0 + 24_000) as State;
++    expect(pausedEnd.phase.id).toBe('done');
++    expect(pausedEnd.coins).toEqual(ended.coins);
++  });
++
++  it('an end after a resume credits the coins of a run with no pause', () => {
++    const ended = kit.vip(kit.start(), 'end', T0 + 5_000) as State;
++    // The same 4 s, a 20 s pause, a resume that lands on 4 s of round time, then the End 1 s later.
++    const resumed = kit.vip(kit.vip(kit.start(), 'pause', T0 + 4_000), 'resume', T0 + 24_000);
++    const resumedEnd = kit.vip(resumed, 'end', T0 + 25_000) as State;
++    expect(resumedEnd.coins).toEqual(ended.coins);
++  });
++});
+diff --git a/games/lane-change/server/index.ts b/games/lane-change/server/index.ts
+index 940a2f7c1..bf084f451 100644
+--- a/games/lane-change/server/index.ts
++++ b/games/lane-change/server/index.ts
+@@ -18,7 +18,7 @@ import type {
+ } from '@partybox/game-sdk';
+ import manifestJson from '../manifest.json' with { type: 'json' };
+ import { enterDone } from './phases/done';
+-import { advancePlay, enterPlay, reducePlay, skipPlay } from './phases/play';
++import { advancePlay, enterPlay, reducePlay, settle, skipPlay } from './phases/play';
+ import { results, scoresOf } from './scoring';
+ import { PHASES } from './types';
+ import type { State } from './types';
+@@ -80,9 +80,12 @@ const reduce = composeReduce<State, Input>({
+   phases: { play: reducePlay },
+   advance: (state, now) => (state.phase.id === 'play' ? advancePlay(state, now, enterDone) : state),
+   skip: (state, now) => (state.phase.id === 'play' ? skipPlay(state, now, enterDone) : state),
+-  // The VIP's end settles the round as a skip does: pickups up to now still count.
++  // The VIP's end settles the round as a skip does: pickups up to now still count. A pause holds the round, so an end
++  // sent while paused settles it where the pause began.
+   end: (state, now) =>
+-    state.phase.id === 'play' ? skipPlay(state, now, enterDone) : enterDone(state, now),
++    state.phase.id === 'play'
++      ? enterDone(settle(state, state.phase.paused?.at ?? now), now)
++      : enterDone(state, now),
+   prepare: (state, event) =>
+     event.type === 'vip' && event.action === 'resume'
+       ? shifted(state, pausedFor(state, event.now))
