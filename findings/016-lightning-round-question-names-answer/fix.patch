@@ -1,0 +1,239 @@
+diff --git a/games/lightning-round/__tests__/answer-not-in-question.test.ts b/games/lightning-round/__tests__/answer-not-in-question.test.ts
+new file mode 100644
+index 000000000..3ba6c54b1
+--- /dev/null
++++ b/games/lightning-round/__tests__/answer-not-in-question.test.ts
+@@ -0,0 +1,36 @@
++// A question must not name its own correct answer: the player reads the question before the reveal, so a question that
++// says "Papua New Guinea" for the answer "New Guinea" gives the answer away. Scans both packs (English and Spanish).
++import { describe, expect, it } from 'vitest';
++import questionsJson from '../content/questions.json' with { type: 'json' };
++import questionsEsJson from '../content/questions.es.json' with { type: 'json' };
++
++// Questions whose answer word is in the text on purpose: a grammar question asks which word of a given sentence is the
++// subject or object, and "una" is both the answer (one) and an article in the question. Open, see FINDING.md.
++const KNOWN = new Set(['gpt-0794', 'gpt-0795', 'gpt-0869', 'gpt-1425', 'lan-0240-es']);
++
++type Item = { id: string; question: string; choices: string[]; answerIndex: number };
++
++const fold = (text: string): string => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
++
++const namesAnswer = (question: string, answer: string): boolean => {
++  const word = fold(answer.trim());
++  if (word.length < 3) return false;
++  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++  return new RegExp(`(?<!\\p{L})${escaped}(?!\\p{L})`, 'u').test(fold(question));
++};
++
++const itemsOf = (json: unknown): Item[] =>
++  (Array.isArray(json) ? json : (json as { items: Item[] }).items) as Item[];
++
++describe('no question names its own answer', () => {
++  it.each([
++    ['questions.json', questionsJson],
++    ['questions.es.json', questionsEsJson],
++  ])('%s', (_name, json) => {
++    const hits = itemsOf(json)
++      .filter((item) => !KNOWN.has(item.id))
++      .filter((item) => namesAnswer(item.question, item.choices[item.answerIndex] ?? ''))
++      .map((item) => `${item.id}: "${item.question}" names "${item.choices[item.answerIndex]}"`);
++    expect(hits).toEqual([]);
++  });
++});
+diff --git a/games/lightning-round/content/questions.es.json b/games/lightning-round/content/questions.es.json
+index e2d0fc737..0c4a37755 100644
+--- a/games/lightning-round/content/questions.es.json
++++ b/games/lightning-round/content/questions.es.json
+@@ -6262,7 +6262,7 @@
+       "category": "geography",
+       "subcategory": "flags-and-borders",
+       "difficulty": "hard",
+-      "question": "¿Qué isla está dividida entre Indonesia y Papúa Nueva Guinea?",
++      "question": "¿Qué gran isla, la segunda más grande del mundo, se reparte entre Indonesia y un país independiente al este?",
+       "choices": ["Timor", "Nueva Guinea", "Java", "Nueva Bretaña"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on New Guinea"
+@@ -18937,7 +18937,7 @@
+       "category": "sports",
+       "subcategory": "basketball",
+       "difficulty": "easy",
+-      "question": "¿Cuántos puntos vale una canasta anotada desde detrás de la línea de tres puntos?",
++      "question": "¿Cuántos puntos vale una canasta anotada desde detrás de la línea de triple?",
+       "choices": ["Tres", "Uno", "Dos", "Cuatro"],
+       "answerIndex": 0,
+       "source": "Widely documented; official NBA and FIBA rules on scoring"
+@@ -23822,7 +23822,7 @@
+       "category": "food-and-drink",
+       "subcategory": "ingredients",
+       "difficulty": "easy",
+-      "question": "¿Cuál es la fruta principal de la salsa de tomate ketchup?",
++      "question": "¿Cuál es la fruta principal de la salsa kétchup?",
+       "choices": ["Pimiento rojo", "Betabel", "Ciruela", "Tomate"],
+       "answerIndex": 3,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on ketchup"
+@@ -37342,7 +37342,7 @@
+       "category": "entertainment",
+       "subcategory": "comics-and-animation",
+       "difficulty": "easy",
+-      "question": "¿Qué serie de anime sigue a un joven ninja llamado Naruto Uzumaki?",
++      "question": "¿Qué serie de anime sigue a un joven ninja llamado Uzumaki?",
+       "choices": ["Bleach", "Inuyasha", "Naruto", "Fairy Tail"],
+       "answerIndex": 2,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on anime"
+@@ -39282,7 +39282,7 @@
+       "category": "everyday-life",
+       "subcategory": "money-and-business",
+       "difficulty": "easy",
+-      "question": "¿Qué ciudad estadounidense alberga Wall Street y la Bolsa de Nueva York?",
++      "question": "¿En qué ciudad estadounidense está Wall Street?",
+       "choices": ["Chicago", "Nueva York", "Boston", "Filadelfia"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Britannica entry on the New York Stock Exchange"
+@@ -50932,7 +50932,7 @@
+       "category": "stem",
+       "subcategory": "biology",
+       "difficulty": "medium",
+-      "question": "¿En un par dominante-recesivo simple, el efecto de qué alelo queda enmascarado en un heterocigoto?",
++      "question": "¿En un par simple de dos alelos, el efecto de qué alelo queda enmascarado en un heterocigoto?",
+       "choices": ["Recesivo", "Codominante", "Ligado", "Dominante"],
+       "answerIndex": 0,
+       "source": "https://openstax.org/books/biology-2e/pages/12-2-characteristics-and-traits"
+@@ -58064,7 +58064,7 @@
+       "difficulty": "easy",
+       "answerIndex": 0,
+       "source": "https://service.mattel.com/instruction_sheets/UNO%20Basic%20IS.pdf",
+-      "question": "¿Qué debes gritar cuando te queda una sola carta en UNO?",
++      "question": "¿Qué debes gritar cuando te queda una sola carta en el juego de cartas con robos de cuatro?",
+       "choices": ["UNO", "Bingo", "Jaque mate", "Última ronda"]
+     },
+     {
+diff --git a/games/lightning-round/content/questions.json b/games/lightning-round/content/questions.json
+index ba711a2e8..407668bfa 100644
+--- a/games/lightning-round/content/questions.json
++++ b/games/lightning-round/content/questions.json
+@@ -5495,7 +5495,7 @@
+       "category": "geography",
+       "subcategory": "flags-and-borders",
+       "difficulty": "hard",
+-      "question": "Which island is divided between Indonesia and Papua New Guinea?",
++      "question": "Which large island, the second largest in the world, is shared by Indonesia and an independent country to its east?",
+       "choices": ["Timor", "New Guinea", "Java", "New Britain"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on New Guinea"
+@@ -12075,7 +12075,7 @@
+       "category": "history",
+       "subcategory": "us-history",
+       "difficulty": "easy",
+-      "question": "At the Boston Tea Party in 1773, what cargo was thrown into the harbour?",
++      "question": "In the 1773 Boston protest, what cargo was thrown into the harbour?",
+       "choices": ["Sugar", "Tea", "Cotton", "Rum"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Britannica entry on the Boston Tea Party"
+@@ -17975,7 +17975,7 @@
+       "category": "sports",
+       "subcategory": "basketball",
+       "difficulty": "easy",
+-      "question": "How many points is a basket scored from behind the three-point line worth?",
++      "question": "How many points is a basket scored from behind the arc worth?",
+       "choices": ["Three", "One", "Two", "Four"],
+       "answerIndex": 0,
+       "source": "Widely documented; official NBA and FIBA rules on scoring"
+@@ -22825,7 +22825,7 @@
+       "category": "food-and-drink",
+       "subcategory": "ingredients",
+       "difficulty": "easy",
+-      "question": "Which fruit is the main ingredient of tomato ketchup?",
++      "question": "Which fruit is the main ingredient of ketchup?",
+       "choices": ["Red pepper", "Beetroot", "Plum", "Tomato"],
+       "answerIndex": 3,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on ketchup"
+@@ -30155,7 +30155,7 @@
+       "category": "language",
+       "subcategory": "grammar-and-spelling",
+       "difficulty": "easy",
+-      "question": "What is the plural of 'sheep'?",
++      "question": "What is the plural of the animal that gives wool and says 'baa'?",
+       "choices": ["Sheep", "Sheeps", "Sheepen", "Shepe"],
+       "answerIndex": 0,
+       "source": "Widely documented; standard English unchanging plurals"
+@@ -31790,7 +31790,7 @@
+       "category": "language",
+       "subcategory": "world-languages",
+       "difficulty": "medium",
+-      "question": "Bahasa Indonesia is the national language of which country?",
++      "question": "Which country's national language is called Bahasa?",
+       "choices": ["Thailand", "Indonesia", "Myanmar", "Cambodia"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on Indonesian language"
+@@ -36205,7 +36205,7 @@
+       "category": "entertainment",
+       "subcategory": "comics-and-animation",
+       "difficulty": "easy",
+-      "question": "Which anime series follows a young ninja named Naruto Uzumaki?",
++      "question": "Which anime series follows a young ninja named Uzumaki?",
+       "choices": ["Bleach", "Inuyasha", "Naruto", "Fairy Tail"],
+       "answerIndex": 2,
+       "source": "Widely documented; e.g. Encyclopaedia Britannica entry on anime"
+@@ -37050,7 +37050,7 @@
+       "category": "everyday-life",
+       "subcategory": "brands-and-logos",
+       "difficulty": "medium",
+-      "question": "Which company's mascot is a green giant who says 'Ho ho ho'?",
++      "question": "Which company's mascot is a giant who says 'Ho ho ho'?",
+       "choices": ["Birds Eye", "Del Monte", "Green Giant", "Heinz"],
+       "answerIndex": 2,
+       "source": "Widely documented; e.g. brand histories of Green Giant vegetables"
+@@ -37080,7 +37080,7 @@
+       "category": "everyday-life",
+       "subcategory": "brands-and-logos",
+       "difficulty": "medium",
+-      "question": "Which brand's logo is a shell, fitting its name?",
++      "question": "Which oil company has a scallop as its logo?",
+       "choices": ["BP", "Shell", "Total", "Esso"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Britannica entry on Royal Dutch Shell"
+@@ -37120,7 +37120,7 @@
+       "category": "everyday-life",
+       "subcategory": "brands-and-logos",
+       "difficulty": "medium",
+-      "question": "Which company's logo is a target-like set of red and white concentric circles?",
++      "question": "Which US retailer's logo is a set of red and white concentric circles?",
+       "choices": ["Costco", "Target", "Walmart", "Sears"],
+       "answerIndex": 1,
+       "source": "Widely documented; e.g. Britannica entry on Target Corporation"
+@@ -48465,7 +48465,7 @@
+       "category": "language",
+       "subcategory": "grammar-and-spelling",
+       "difficulty": "medium",
+-      "question": "What is the standard plural of moose?",
++      "question": "What is the standard plural of the large deer that lives in Canada?",
+       "choices": ["Mooses", "Meese", "Moose", "Moosen"],
+       "answerIndex": 2,
+       "source": "https://www.merriam-webster.com/dictionary/moose"
+@@ -49100,7 +49100,7 @@
+       "category": "stem",
+       "subcategory": "chemistry",
+       "difficulty": "easy",
+-      "question": "Ordinary carbon steel consists mainly of iron mixed with which element?",
++      "question": "Ordinary steel consists mainly of iron mixed with a small amount of which element?",
+       "choices": ["Carbon", "Calcium", "Silicon", "Copper"],
+       "answerIndex": 0,
+       "source": "https://periodic-table.rsc.org/element/26/"
+@@ -49475,7 +49475,7 @@
+       "category": "stem",
+       "subcategory": "biology",
+       "difficulty": "medium",
+-      "question": "In a simple dominant-recessive pair, which allele's effect is masked in a heterozygote?",
++      "question": "In a simple two-allele pair, which allele's effect is masked in a heterozygote?",
+       "choices": ["Recessive", "Codominant", "Linked", "Dominant"],
+       "answerIndex": 0,
+       "source": "https://openstax.org/books/biology-2e/pages/12-2-characteristics-and-traits"
+@@ -56352,7 +56352,7 @@
+       "difficulty": "easy",
+       "answerIndex": 0,
+       "source": "https://service.mattel.com/instruction_sheets/UNO%20Basic%20IS.pdf",
+-      "question": "What should you call out when you have one card left in UNO?",
++      "question": "What should you shout when you are down to your last card in the card game with Draw Fours?",
+       "choices": ["UNO", "Bingo", "Checkmate", "Last round"]
+     },
+     {

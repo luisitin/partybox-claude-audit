@@ -1,0 +1,78 @@
+# Finding 016: lightning-round questions name their own correct answer (pass 3)
+# Monorepo SHA 6399290d12942b6c6b8b5b477fbbcd049adaad83
+
+## Before the fix: games/lightning-round/__tests__/answer-not-in-question.test.ts on the unpatched content
+
+ RUN  v4.1.11 /home/user/partybox
+     × questions.json 835ms
+     × questions.es.json 2324ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |games| games/lightning-round/__tests__/answer-not-in-question.test.ts > no question names its own answer > questions.json
+AssertionError: expected [ …(14) ] to deeply equal []
+- Expected
++ Received
+- []
++ [
++   "geo-0319: \"Which island is divided between Indonesia and Papua New Guinea?\" names \"New Guinea\"",
++   "his-0198: \"At the Boston Tea Party in 1773, what cargo was thrown into the harbour?\" names \"Tea\"",
++   "spo-0033: \"How many points is a basket scored from behind the three-point line worth?\" names \"Three\"",
++   "foo-0135: \"Which fruit is the main ingredient of tomato ketchup?\" names \"Tomato\"",
++   "lan-0131: \"What is the plural of 'sheep'?\" names \"Sheep\"",
++   "lan-0280: \"Bahasa Indonesia is the national language of which country?\" names \"Indonesia\"",
++   "ent-0314: \"Which anime series follows a young ninja named Naruto Uzumaki?\" names \"Naruto\"",
++   "eve-0038: \"Which company's mascot is a green giant who says 'Ho ho ho'?\" names \"Green Giant\"",
++   "eve-0041: \"Which brand's logo is a shell, fitting its name?\" names \"Shell\"",
++   "eve-0045: \"Which company's logo is a target-like set of red and white concentric circles?\" names \"Target\"",
++   "gpt-0783: \"What is the standard plural of moose?\" names \"Moose\"",
++   "gpt-0838: \"Ordinary carbon steel consists mainly of iron mixed with which element?\" names \"Carbon\"",
++   "gpt-0873: \"In a simple dominant-recessive pair, which allele's effect is masked in a heterozygote?\" names \"Recessive\"",
++   "bcp-025: \"What should you call out when you have one card left in UNO?\" names \"UNO\"",
++ ]
+     33|       .filter((item) => namesAnswer(item.question, item.choices[item.a…
+     34|       .map((item) => `${item.id}: "${item.question}" names "${item.cho…
+     35|     expect(hits).toEqual([]);
+       |                  ^
+     36|   });
+     37| });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  |games| games/lightning-round/__tests__/answer-not-in-question.test.ts > no question names its own answer > questions.es.json
+AssertionError: expected [ …(7) ] to deeply equal []
+- Expected
++ Received
+- []
++ [
++   "geo-0319: \"¿Qué isla está dividida entre Indonesia y Papúa Nueva Guinea?\" names \"Nueva Guinea\"",
++   "spo-0033: \"¿Cuántos puntos vale una canasta anotada desde detrás de la línea de tres puntos?\" names \"Tres\"",
++   "foo-0135: \"¿Cuál es la fruta principal de la salsa de tomate ketchup?\" names \"Tomate\"",
++   "ent-0314: \"¿Qué serie de anime sigue a un joven ninja llamado Naruto Uzumaki?\" names \"Naruto\"",
++   "eve-0143: \"¿Qué ciudad estadounidense alberga Wall Street y la Bolsa de Nueva York?\" names \"Nueva York\"",
++   "gpt-0873: \"¿En un par dominante-recesivo simple, el efecto de qué alelo queda enmascarado en un heterocigoto?\" names \"Recesivo\"",
++   "bcp-025: \"¿Qué debes gritar cuando te queda una sola carta en UNO?\" names \"UNO\"",
++ ]
+     33|       .filter((item) => namesAnswer(item.question, item.choices[item.a…
+     34|       .map((item) => `${item.id}: "${item.question}" names "${item.cho…
+     35|     expect(hits).toEqual([]);
+       |                  ^
+     36|   });
+     37| });
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  04:06:53
+   Duration  5.34s (transform 1.68s, setup 0ms, import 1.95s, tests 3.16s, environment 0ms)
+exit 1
+
+## After the fix (content patch applied): the lightning-round project
+
+ Test Files  16 passed (16)
+      Tests  90 passed (90)
+exit 0
+
+## Also after the fix
+
+ Test Files  1 passed | 8 skipped (9)
+      Tests  19 passed | 2136 skipped (2155)
+prettier --check on the test and both JSON files: clean
+eslint on the test file: rc=0
+
+tsc: node_modules/.bin/tsc -p tsconfig.json --noEmit (fix applied, tree as in fix.patch): exit 0
